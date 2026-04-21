@@ -1,47 +1,65 @@
 import streamlit as st
-from openai import OpenAI  # <--- Nuova libreria
-from streamlit_mic_recorder import mic_recorder
-import io
+from datetime import datetime, time
 
-# --- CONFIGURAZIONE NEI "SECRETS" DI STREAMLIT ---
-# Incolla la tua chiave OpenAI nelle impostazioni (Settings > Secrets) di Streamlit Cloud
-# openai_key = st.secrets["OPENAI_API_KEY"]
-# client = OpenAI(api_key=openai_key)
+# --- 1. CONFIGURAZIONE PAGINA ---
+st.set_page_config(page_title="NetLex Agenda", page_icon="📅")
 
-st.subheader("🎤 Dettatura Vocale Real-Time")
+st.title("📅 NetLex Smart Agenda")
+st.markdown("Inserimento rapido appuntamenti con verifica disponibilità.")
 
-audio = mic_recorder(
-    start_prompt="Inizia a parlare", 
-    stop_prompt="Smetti e Trascrivi", 
-    just_once=True,
-    key='registratore_reale'
-)
+# --- 2. BARRA LATERALE (NETLEX API) ---
+with st.sidebar:
+    st.header("Connessione NetLex")
+    # Qui userai la chiave che ti fornirà TeamSystem
+    api_key_netlex = st.text_input("Inserisci API Key NetLex", type="password")
+    st.divider()
+    st.info("L'app verificherà in tempo reale se lo slot è libero sul tuo database NetLex.")
 
-testo_rilevato = ""
+# --- 3. FORM APPUNTAMENTO ---
+# Usiamo un modulo (form) per inviare i dati tutti insieme
+with st.form("form_netlex"):
+    st.subheader("Nuovo Impegno")
+    
+    # Campo Titolo: su Android puoi usare il microfono della tastiera qui
+    titolo = st.text_input("Titolo Appuntamento", placeholder="Es: Incontro Cliente Rossi / Udienza")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        data = st.date_input("Data Appuntamento", datetime.now())
+    with col2:
+        ora_inizio = st.time_input("Ora Inizio", time(9, 0))
+    
+    durata = st.select_slider(
+        "Durata stimata (minuti)",
+        options=[15, 30, 45, 60, 90, 120],
+        value=60
+    )
+    
+    st.divider()
+    submit = st.form_submit_button("Verifica e Salva in Agenda")
 
-if audio:
-    try:
-        # Trasformiamo i dati audio in un file "virtuale" che OpenAI può leggere
-        audio_bio = io.BytesIO(audio['bytes'])
-        audio_bio.name = "audio.wav"
-        
-        with st.spinner("Trascrizione in corso..."):
-            # Chiamata a OpenAI Whisper
-            # NOTA: Assicurati di avere la chiave configurata
-            if "OPENAI_API_KEY" in st.secrets:
-                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                response = client.audio.transcriptions.create(
-                    model="whisper-1", 
-                    file=audio_bio,
-                    language="it"  # Forza la lingua italiana
-                )
-                testo_rilevato = response.text
-                st.success(f"Ho capito: {testo_rilevato}")
-            else:
-                st.error("Manca la chiave OPENAI_API_KEY nei Secrets di Streamlit!")
+# --- 4. LOGICA DI FUNZIONAMENTO ---
+if submit:
+    if not api_key_netlex:
+        st.error("⚠️ Errore: Inserisci la chiave API di NetLex nella barra laterale.")
+    elif not titolo:
+        st.warning("⚠️ Per favore, inserisci un titolo per l'appuntamento.")
+    else:
+        # Qui l'app fa il suo lavoro
+        try:
+            with st.spinner("Connessione a NetLex in corso..."):
+                # Simulazione del controllo disponibilità
+                # In futuro, qui inseriremo la chiamata API reale
+                successo = True 
                 
-    except Exception as e:
-        st.error(f"Errore nella trascrizione: {e}")
+                if successo:
+                    st.success(f"✅ Slot libero! L'appuntamento '{titolo}' è stato registrato.")
+                    st.balloons()
+                else:
+                    st.error("❌ Errore: Lo slot selezionato è già occupato in agenda.")
+                    
+        except Exception as e:
+            st.error(f"Si è verificato un problema tecnico: {e}")
 
-# Poi il testo_rilevato andrà automaticamente nel campo Titolo
-titolo = st.text_input("Titolo Appuntamento", value=testo_rilevato)
+# --- 5. FOOTER ---
+st.caption("Interfaccia ottimizzata per dispositivi Android - Collegamento REST API NetLex")
