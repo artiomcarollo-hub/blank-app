@@ -1,80 +1,47 @@
 import streamlit as st
-from datetime import datetime, time
+from openai import OpenAI  # <--- Nuova libreria
 from streamlit_mic_recorder import mic_recorder
+import io
 
-# --- 1. CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="NetLex Smart Agenda", page_icon="📅")
+# --- CONFIGURAZIONE NEI "SECRETS" DI STREAMLIT ---
+# Incolla la tua chiave OpenAI nelle impostazioni (Settings > Secrets) di Streamlit Cloud
+# openai_key = st.secrets["OPENAI_API_KEY"]
+# client = OpenAI(api_key=openai_key)
 
-st.title("📅 NetLex Smart Agenda")
-st.markdown("Gestione rapida appuntamenti con controllo sovrapposizioni.")
+st.subheader("🎤 Dettatura Vocale Real-Time")
 
-# --- 2. BARRA LATERALE (API KEY) ---
-with st.sidebar:
-    st.header("Configurazione")
-    api_key = st.text_input("Inserisci API Key NetLex", type="password", help="La chiave segreta del tuo account NetLex")
-    st.info("Senza API Key, l'app funzionerà in modalità simulazione.")
-
-# --- 3. DETTATURA VOCALE ---
-st.subheader("🎤 Dettatura Vocale")
-st.write("Clicca sul microfono e detta il titolo dell'appuntamento:")
-
-# Il componente del microfono
 audio = mic_recorder(
-    start_prompt="🎤 Inizia a parlare", 
-    stop_prompt="🛑 Ferma", 
+    start_prompt="Inizia a parlare", 
+    stop_prompt="Smetti e Trascrivi", 
     just_once=True,
-    key='registratore_vocale'
+    key='registratore_reale'
 )
 
-# Gestione del testo dettato (Simulazione trascrizione)
 testo_rilevato = ""
+
 if audio:
-    st.success("✅ Audio ricevuto! (In attesa di collegamento Speech-to-Text)")
-    # Nota: per trasformare l'audio in testo reale serve un servizio come OpenAI Whisper
-    testo_rilevato = "Nuovo appuntamento da definire"
-
-# --- 4. FORM APPUNTAMENTO ---
-st.divider()
-with st.form("form_appuntamento"):
-    st.subheader("Dettagli Appuntamento")
-    
-    # Se hai dettato qualcosa, il titolo viene pre-compilato
-    titolo = st.text_input("Titolo Appuntamento", value=testo_rilevato, placeholder="Es: Udienza Civile Rossi")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        data = st.date_input("Data", datetime.now())
-    with col2:
-        ora_inizio = st.time_input("Ora Inizio", time(9, 0))
+    try:
+        # Trasformiamo i dati audio in un file "virtuale" che OpenAI può leggere
+        audio_bio = io.BytesIO(audio['bytes'])
+        audio_bio.name = "audio.wav"
         
-    durata = st.number_input("Durata (minuti)", min_value=15, step=15, value=60)
-    
-    submit = st.form_submit_button("Verifica Disponibilità e Salva")
-
-# --- 5. LOGICA DI CONTROLLO ---
-if submit:
-    if not api_key:
-        st.warning("⚠️ Inserisci l'API Key nella barra laterale per collegarti a NetLex.")
-    elif not titolo:
-        st.error("❌ Inserisci un titolo per l'appuntamento.")
-    else:
-        try:
-            # Calcolo orario completo
-            inizio_dt = datetime.combine(data, ora_inizio)
-            
-            with st.spinner("Interrogazione database NetLex..."):
-                # Qui andrà la chiamata API reale verso TeamSystem
-                # Per ora usiamo una simulazione positiva
-                possibile = True 
+        with st.spinner("Trascrizione in corso..."):
+            # Chiamata a OpenAI Whisper
+            # NOTA: Assicurati di avere la chiave configurata
+            if "OPENAI_API_KEY" in st.secrets:
+                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                response = client.audio.transcriptions.create(
+                    model="whisper-1", 
+                    file=audio_bio,
+                    language="it"  # Forza la lingua italiana
+                )
+                testo_rilevato = response.text
+                st.success(f"Ho capito: {testo_rilevato}")
+            else:
+                st.error("Manca la chiave OPENAI_API_KEY nei Secrets di Streamlit!")
                 
-                if possibile:
-                    st.success(f"✔️ Slot Libero! Appuntamento '{titolo}' pronto per l'invio a NetLex.")
-                    st.balloons()
-                else:
-                    st.error("❌ Attenzione: Esiste già un impegno per questo orario.")
-        
-        except Exception as e:
-            st.error(f"Errore tecnico: {e}")
+    except Exception as e:
+        st.error(f"Errore nella trascrizione: {e}")
 
-# --- 6. ISTRUZIONI ---
-st.caption("Sviluppato per integrazione diretta con TeamSystem NetLex via REST API.")
+# Poi il testo_rilevato andrà automaticamente nel campo Titolo
+titolo = st.text_input("Titolo Appuntamento", value=testo_rilevato)
