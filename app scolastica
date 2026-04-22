@@ -1,0 +1,6 @@
+import openai
+
+audio_file = open("lezione_storia.mp3", "rb")
+# Trasforma la voce in testo
+transcript = openai.Audio.transcribe("whisper-1", audio_file)
+testo_lezione = transcript["text"]
